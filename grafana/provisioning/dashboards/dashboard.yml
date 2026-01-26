@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'Nutanix Dashboards'
+    orgId: 1
+    folder: 'Nutanix'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

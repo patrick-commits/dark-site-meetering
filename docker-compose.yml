@@ -1,0 +1,65 @@
+services:
+  nutanix-exporter:
+    build: ./exporter
+    container_name: nutanix-exporter
+    ports:
+      - "9090:9090"
+    environment:
+      - NUTANIX_HOST=${NUTANIX_HOST:-prism-central.example.com}
+      - NUTANIX_USERNAME=${NUTANIX_USERNAME:-admin}
+      - NUTANIX_PASSWORD=${NUTANIX_PASSWORD:-changeme}
+      - EXPORTER_PORT=9090
+      - SCRAPE_INTERVAL=60
+    restart: unless-stopped
+
+  # Daily CSV export service - runs at 1:00 AM daily
+  nutanix-daily-export:
+    build: ./exporter
+    container_name: nutanix-daily-export
+    environment:
+      - NUTANIX_HOST=${NUTANIX_HOST:-prism-central.example.com}
+      - NUTANIX_USERNAME=${NUTANIX_USERNAME:-admin}
+      - NUTANIX_PASSWORD=${NUTANIX_PASSWORD:-changeme}
+      - ACCOUNT_ID=${ACCOUNT_ID:-default}
+      - APP_ID=${APP_ID:-}
+      - EXPORT_DIR=/data/exports
+    volumes:
+      - ./exports:/data/exports
+    entrypoint: ["python", "-u", "daily_export_scheduler.py"]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    depends_on:
+      - nutanix-exporter
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus_data:
+  grafana_data:
