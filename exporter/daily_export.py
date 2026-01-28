@@ -5,6 +5,12 @@ Dark Site Metering - Daily CSV Export
 Exports metering data in billing format:
 accountId, qty, startDate, endDate, meteredItem, appid, sno, fqdn, type, description, guid
 
+Fields:
+- sno: Cluster UUID
+- guid: Subscription ID
+- appid: Nutanix Product (NCI Pro, NCI Ultimate, Files, etc.)
+- type: Cores or TIB
+
 Metered items:
 - Cores: Physical CPU cores from hosts
 - Files_TiB: File server storage consumed in TiB
@@ -33,7 +39,7 @@ NUTANIX_HOST = os.getenv('NUTANIX_HOST', 'prism-central.example.com')
 NUTANIX_USERNAME = os.getenv('NUTANIX_USERNAME', 'admin')
 NUTANIX_PASSWORD = os.getenv('NUTANIX_PASSWORD', 'changeme')
 ACCOUNT_ID = os.getenv('ACCOUNT_ID', '123456')  # Default account ID for metering
-APP_ID = os.getenv('APP_ID', '')
+SUBSCRIPTION_ID = os.getenv('SUBSCRIPTION_ID', '123456')  # Subscription ID for guid field
 EXPORT_DIR = os.getenv('EXPORT_DIR', '/data/exports')
 
 # Base URL for Nutanix API
@@ -49,7 +55,8 @@ class NutanixExporter:
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         })
-        self.cluster_map = {}
+        self.cluster_map = {}  # uuid -> name
+        self.nci_license_type = 'NCI'  # Will be updated to NCI Pro or NCI Ultimate
 
     def _make_request_v3(self, endpoint, body=None):
         """Make v3 API POST request with error handling."""
@@ -96,6 +103,35 @@ class NutanixExporter:
 
         return self.cluster_map
 
+    def get_licenses(self):
+        """Fetch licenses to determine NCI license type."""
+        url = f"https://{NUTANIX_HOST}:9440/api/licensing/v4.0/config/licenses"
+        try:
+            response = self.session.get(url, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                for lic in data.get('data', []):
+                    lic_name = lic.get('name', '')
+                    lic_type = lic.get('type', '')
+                    category = lic.get('category', '')
+
+                    # Check for NCI license type
+                    if lic_type == 'NCI':
+                        if category == 'ULTIMATE':
+                            self.nci_license_type = 'NCI Ultimate'
+                        elif category == 'PRO':
+                            self.nci_license_type = 'NCI Pro'
+                        elif category == 'STARTER':
+                            self.nci_license_type = 'NCI Starter'
+                        else:
+                            self.nci_license_type = f'NCI {category}'
+                        logger.info(f"Detected license: {self.nci_license_type}")
+                        break
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Could not fetch licenses: {e}")
+
+        return self.nci_license_type
+
     def get_hosts_with_cores(self):
         """Fetch hosts and their physical CPU cores."""
         hosts = []
@@ -126,6 +162,7 @@ class NutanixExporter:
             hosts.append({
                 'uuid': host_uuid,
                 'name': host_name,
+                'cluster_uuid': cluster_uuid,
                 'cluster_name': cluster_name,
                 'num_cpu_cores': num_cpu_cores,
                 'num_cpu_sockets': num_cpu_sockets,
@@ -185,9 +222,11 @@ class NutanixExporter:
         # Fetch clusters first for name mapping
         self.get_clusters()
 
+        # Fetch licenses to determine NCI type
+        self.get_licenses()
+
         # Prepare CSV data
         rows = []
-        sno = 1
 
         # Get hosts with physical CPU cores
         hosts = self.get_hosts_with_cores()
@@ -196,6 +235,7 @@ class NutanixExporter:
         for host in hosts:
             host_name = host.get('name', 'unknown')
             host_uuid = host.get('uuid', '')
+            cluster_uuid = host.get('cluster_uuid', '')
             num_cores = host.get('num_cpu_cores', 0)
             total_cores += num_cores
 
@@ -206,14 +246,13 @@ class NutanixExporter:
                     'startDate': start_date_str,
                     'endDate': end_date_str,
                     'meteredItem': 'Cores',
-                    'appid': APP_ID,
-                    'sno': sno,
+                    'appid': self.nci_license_type,
+                    'sno': cluster_uuid,
                     'fqdn': host_name,
-                    'type': 'Host',
+                    'type': 'Cores',
                     'description': f'Physical CPU cores for host {host_name}',
-                    'guid': host_uuid
+                    'guid': SUBSCRIPTION_ID
                 })
-                sno += 1
 
         # Get file servers with storage usage
         file_servers = self.get_file_servers()
@@ -233,14 +272,13 @@ class NutanixExporter:
                 'startDate': start_date_str,
                 'endDate': end_date_str,
                 'meteredItem': 'Files_TiB',
-                'appid': APP_ID,
-                'sno': sno,
+                'appid': 'Files',
+                'sno': fs_uuid,
                 'fqdn': fs_name,
-                'type': 'FileServer',
+                'type': 'TIB',
                 'description': f'Files consumed storage for {fs_name}',
-                'guid': fs_uuid
+                'guid': SUBSCRIPTION_ID
             })
-            sno += 1
 
         # Write CSV (tab-separated)
         fieldnames = ['accountId', 'qty', 'startDate', 'endDate', 'meteredItem',
