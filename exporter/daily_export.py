@@ -57,6 +57,7 @@ class NutanixExporter:
         })
         self.cluster_map = {}  # uuid -> name
         self.nci_license_type = 'NCI'  # Will be updated to NCI Pro or NCI Ultimate
+        self.nus_license_type = 'NUS'  # Will be updated to NUS Pro or NUS Ultimate
 
     def _make_request_v3(self, endpoint, body=None):
         """Make v3 API POST request with error handling."""
@@ -104,19 +105,18 @@ class NutanixExporter:
         return self.cluster_map
 
     def get_licenses(self):
-        """Fetch licenses to determine NCI license type."""
+        """Fetch licenses to determine NCI and NUS license types."""
         url = f"https://{NUTANIX_HOST}:9440/api/licensing/v4.0/config/licenses"
         try:
             response = self.session.get(url, timeout=30)
             if response.status_code == 200:
                 data = response.json()
                 for lic in data.get('data', []):
-                    lic_name = lic.get('name', '')
                     lic_type = lic.get('type', '')
                     category = lic.get('category', '')
 
                     # Check for NCI license type
-                    if lic_type == 'NCI':
+                    if lic_type == 'NCI' and category not in ['SECURITY']:
                         if category == 'ULTIMATE':
                             self.nci_license_type = 'NCI Ultimate'
                         elif category == 'PRO':
@@ -125,12 +125,22 @@ class NutanixExporter:
                             self.nci_license_type = 'NCI Starter'
                         else:
                             self.nci_license_type = f'NCI {category}'
-                        logger.info(f"Detected license: {self.nci_license_type}")
-                        break
+                        logger.info(f"Detected NCI license: {self.nci_license_type}")
+
+                    # Check for NUS license type (for Files)
+                    if lic_type == 'NUS':
+                        if category == 'ULTIMATE':
+                            self.nus_license_type = 'NUS Ultimate'
+                        elif category == 'PRO':
+                            self.nus_license_type = 'NUS Pro'
+                        elif category == 'STARTER':
+                            self.nus_license_type = 'NUS Starter'
+                        else:
+                            self.nus_license_type = f'NUS {category}'
+                        logger.info(f"Detected NUS license: {self.nus_license_type}")
+
         except requests.exceptions.RequestException as e:
             logger.warning(f"Could not fetch licenses: {e}")
-
-        return self.nci_license_type
 
     def get_hosts_with_cores(self):
         """Fetch hosts and their physical CPU cores."""
@@ -271,8 +281,8 @@ class NutanixExporter:
                 'qty': used_tib,
                 'startDate': start_date_str,
                 'endDate': end_date_str,
-                'meteredItem': 'Files_TiB',
-                'appid': 'Files',
+                'meteredItem': 'Files',
+                'appid': self.nus_license_type,
                 'sno': fs_uuid,
                 'fqdn': fs_name,
                 'type': 'TIB',
