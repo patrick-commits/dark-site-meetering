@@ -42,6 +42,11 @@ cluster_storage_usage = Gauge('nutanix_cluster_storage_usage_bytes', 'Cluster st
 cluster_storage_capacity = Gauge('nutanix_cluster_storage_capacity_bytes', 'Cluster storage capacity in bytes', ['cluster_name', 'cluster_uuid'])
 cluster_storage_free = Gauge('nutanix_cluster_storage_free_bytes', 'Cluster storage free in bytes', ['cluster_name', 'cluster_uuid'])
 cluster_node_count = Gauge('nutanix_cluster_node_count', 'Number of nodes in cluster', ['cluster_name', 'cluster_uuid'])
+cluster_physical_cpu_cores = Gauge('nutanix_cluster_physical_cpu_cores', 'Total physical CPU cores in cluster', ['cluster_name', 'cluster_uuid'])
+
+# License metrics
+license_type = Info('nutanix_license', 'Nutanix license information')
+license_cores = Gauge('nutanix_license_cores', 'Licensed CPU cores', ['cluster_name', 'license_type'])
 
 # VM metrics
 vm_count = Gauge('nutanix_vm_count', 'Total number of VMs', ['cluster_name'])
@@ -55,6 +60,8 @@ host_count = Gauge('nutanix_host_count', 'Total number of hosts', ['cluster_name
 host_cpu_usage = Gauge('nutanix_host_cpu_usage_percent', 'Host CPU usage percentage', ['host_name', 'host_uuid', 'cluster_name'])
 host_memory_usage = Gauge('nutanix_host_memory_usage_percent', 'Host memory usage percentage', ['host_name', 'host_uuid', 'cluster_name'])
 host_num_vms = Gauge('nutanix_host_num_vms', 'Number of VMs on host', ['host_name', 'host_uuid', 'cluster_name'])
+host_physical_cpu_cores = Gauge('nutanix_host_physical_cpu_cores', 'Physical CPU cores on host', ['host_name', 'host_uuid', 'cluster_name'])
+host_cpu_sockets = Gauge('nutanix_host_cpu_sockets', 'Number of CPU sockets on host', ['host_name', 'host_uuid', 'cluster_name'])
 
 # Storage container metrics
 storage_container_usage = Gauge('nutanix_storage_container_usage_bytes', 'Storage container usage in bytes', ['container_name', 'container_uuid'])
@@ -221,7 +228,14 @@ class NutanixCollector:
                 cluster_storage_capacity.labels(cluster_name=cluster_name, cluster_uuid=cluster_uuid).set(storage_capacity)
                 cluster_storage_free.labels(cluster_name=cluster_name, cluster_uuid=cluster_uuid).set(storage_free)
 
-                logger.info(f"Collected metrics for cluster: {cluster_name} (CPU: {cpu_percent:.1f}%, Mem: {memory_percent:.1f}%)")
+                # Physical CPU cores (from cluster or sum of hosts)
+                total_cores = cluster.get('num_cpu_cores', 0)
+                if not total_cores:
+                    # Try to get from cluster stats
+                    total_cores = cluster.get('total_cpu_cores', 0)
+                cluster_physical_cpu_cores.labels(cluster_name=cluster_name, cluster_uuid=cluster_uuid).set(total_cores)
+
+                logger.info(f"Collected metrics for cluster: {cluster_name} (CPU: {cpu_percent:.1f}%, Mem: {memory_percent:.1f}%, Cores: {total_cores})")
 
         return cluster_map
 
@@ -345,6 +359,14 @@ class NutanixCollector:
             # Number of VMs
             num_vms = resources.get('hypervisor', {}).get('num_vms', 0)
             host_num_vms.labels(host_name=host_name, host_uuid=host_uuid, cluster_name=cluster_name).set(num_vms)
+
+            # Physical CPU cores and sockets
+            cpu_capacity = resources.get('cpu_capacity_hz', 0)
+            num_cpu_cores = resources.get('num_cpu_cores', 0)
+            num_cpu_sockets = resources.get('num_cpu_sockets', 0)
+
+            host_physical_cpu_cores.labels(host_name=host_name, host_uuid=host_uuid, cluster_name=cluster_name).set(num_cpu_cores)
+            host_cpu_sockets.labels(host_name=host_name, host_uuid=host_uuid, cluster_name=cluster_name).set(num_cpu_sockets)
 
         # Set host counts per cluster
         for cluster_name, count in host_counts.items():

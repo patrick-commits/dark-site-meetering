@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-Nutanix Daily CSV Export
+Dark Site Metering - Daily CSV Export
 
-Exports VM resource data in billing/metering format:
+Exports metering data in billing format:
 accountId, qty, startDate, endDate, meteredItem, appid, sno, fqdn, type, description, guid
+
+Metered items:
+- Cores: Physical CPU cores from hosts
+- Files_TiB: File server storage consumed in TiB
 """
 
 import os
@@ -28,7 +32,7 @@ logger = logging.getLogger(__name__)
 NUTANIX_HOST = os.getenv('NUTANIX_HOST', 'prism-central.example.com')
 NUTANIX_USERNAME = os.getenv('NUTANIX_USERNAME', 'admin')
 NUTANIX_PASSWORD = os.getenv('NUTANIX_PASSWORD', 'changeme')
-ACCOUNT_ID = os.getenv('ACCOUNT_ID', 'default')
+ACCOUNT_ID = os.getenv('ACCOUNT_ID', '123456')  # Default account ID for metering
 APP_ID = os.getenv('APP_ID', '')
 EXPORT_DIR = os.getenv('EXPORT_DIR', '/data/exports')
 
@@ -92,30 +96,43 @@ class NutanixExporter:
 
         return self.cluster_map
 
-    def get_vms(self):
-        """Fetch all VMs from Prism Central using v3 API."""
-        all_vms = []
-        offset = 0
-        length = 500
+    def get_hosts_with_cores(self):
+        """Fetch hosts and their physical CPU cores."""
+        hosts = []
 
-        while True:
-            data = self._make_request_v3("vms/list", {"kind": "vm", "length": length, "offset": offset})
-            if not data:
-                break
+        data = self._make_request_v3("hosts/list", {"kind": "host", "length": 500})
+        if not data:
+            logger.warning("No hosts found")
+            return hosts
 
-            vms = data.get('entities', [])
-            if not vms:
-                break
+        for host in data.get('entities', []):
+            metadata = host.get('metadata', {})
+            spec = host.get('spec', {})
+            status = host.get('status', {})
+            resources = status.get('resources', {})
 
-            all_vms.extend(vms)
-            total = data.get('metadata', {}).get('total_matches', 0)
-            logger.info(f"Fetched {len(all_vms)}/{total} VMs")
+            host_uuid = metadata.get('uuid', '')
+            host_name = spec.get('name', status.get('name', 'unknown'))
 
-            if len(all_vms) >= total:
-                break
-            offset += length
+            # Get cluster reference
+            cluster_ref = status.get('cluster_reference', {})
+            cluster_uuid = cluster_ref.get('uuid', '')
+            cluster_name = self.cluster_map.get(cluster_uuid, cluster_ref.get('name', 'unknown'))
 
-        return all_vms
+            # Get physical CPU cores
+            num_cpu_cores = resources.get('num_cpu_cores', 0)
+            num_cpu_sockets = resources.get('num_cpu_sockets', 0)
+
+            hosts.append({
+                'uuid': host_uuid,
+                'name': host_name,
+                'cluster_name': cluster_name,
+                'num_cpu_cores': num_cpu_cores,
+                'num_cpu_sockets': num_cpu_sockets,
+            })
+
+        logger.info(f"Fetched {len(hosts)} hosts")
+        return hosts
 
     def get_file_servers(self):
         """Fetch file servers and their storage stats using v4 API."""
@@ -135,19 +152,21 @@ class NutanixExporter:
             stats_data = self._make_request_v4(f"files/v4.0/stats/file-servers/{fs_uuid}")
             if stats_data:
                 stats = stats_data.get('data', {})
+                used_bytes = stats.get('usedCapacityBytes', 0)
+                capacity_bytes = stats.get('storageCapacityBytes', 0)
+
                 file_servers.append({
                     'uuid': fs_uuid,
                     'name': fs_name,
-                    'capacity_bytes': stats.get('storageCapacityBytes', 0),
-                    'used_bytes': stats.get('usedCapacityBytes', 0),
-                    'available_bytes': stats.get('availableCapacityBytes', 0),
+                    'capacity_bytes': capacity_bytes,
+                    'used_bytes': used_bytes,
                 })
 
         logger.info(f"Fetched {len(file_servers)} file servers")
         return file_servers
 
     def export_to_csv(self, output_path=None):
-        """Export VM data to CSV in billing format."""
+        """Export metering data to CSV in billing format."""
         # Calculate date range (yesterday for daily export)
         end_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         start_date = end_date - timedelta(days=1)
@@ -166,122 +185,62 @@ class NutanixExporter:
         # Fetch clusters first for name mapping
         self.get_clusters()
 
-        # Fetch VMs
-        vms = self.get_vms()
-        if not vms:
-            logger.warning("No VMs found to export")
-            return None
-
         # Prepare CSV data
         rows = []
         sno = 1
 
-        for vm in vms:
-            metadata = vm.get('metadata', {})
-            spec = vm.get('spec', {})
-            status = vm.get('status', {})
+        # Get hosts with physical CPU cores
+        hosts = self.get_hosts_with_cores()
+        total_cores = 0
 
-            vm_uuid = metadata.get('uuid', '')
-            vm_name = spec.get('name', status.get('name', 'unknown'))
-            vm_description = spec.get('description', '')
+        for host in hosts:
+            host_name = host.get('name', 'unknown')
+            host_uuid = host.get('uuid', '')
+            num_cores = host.get('num_cpu_cores', 0)
+            total_cores += num_cores
 
-            # Get cluster name
-            cluster_ref = spec.get('cluster_reference', {})
-            cluster_uuid = cluster_ref.get('uuid', '')
-            cluster_name = self.cluster_map.get(cluster_uuid, ACCOUNT_ID)
+            if num_cores > 0:
+                rows.append({
+                    'accountId': ACCOUNT_ID,
+                    'qty': num_cores,
+                    'startDate': start_date_str,
+                    'endDate': end_date_str,
+                    'meteredItem': 'Cores',
+                    'appid': APP_ID,
+                    'sno': sno,
+                    'fqdn': host_name,
+                    'type': 'Host',
+                    'description': f'Physical CPU cores for host {host_name}',
+                    'guid': host_uuid
+                })
+                sno += 1
 
-            # Calculate resources from spec
-            spec_resources = spec.get('resources', {})
-            num_sockets = spec_resources.get('num_sockets', 1)
-            num_vcpus_per_socket = spec_resources.get('num_vcpus_per_socket', 1)
-            total_vcpus = num_sockets * num_vcpus_per_socket
-
-            memory_mib = spec_resources.get('memory_size_mib', 0)
-            memory_gb = round(memory_mib / 1024, 2)
-
-            # Calculate total disk size
-            disk_list = spec_resources.get('disk_list', [])
-            total_disk_bytes = 0
-            for disk in disk_list:
-                disk_size = disk.get('disk_size_bytes', 0)
-                if disk_size:
-                    total_disk_bytes += disk_size
-                else:
-                    disk_size_mib = disk.get('disk_size_mib', 0)
-                    total_disk_bytes += disk_size_mib * 1024 * 1024
-            total_disk_gb = round(total_disk_bytes / (1024 ** 3), 2)
-
-            # Create row for vCPU
-            rows.append({
-                'accountId': cluster_name,
-                'qty': total_vcpus,
-                'startDate': start_date_str,
-                'endDate': end_date_str,
-                'meteredItem': 'vCPU',
-                'appid': APP_ID,
-                'sno': sno,
-                'fqdn': vm_name,
-                'type': 'VM',
-                'description': f'vCPU allocation for {vm_name}',
-                'guid': vm_uuid
-            })
-            sno += 1
-
-            # Create row for Memory
-            rows.append({
-                'accountId': cluster_name,
-                'qty': memory_gb,
-                'startDate': start_date_str,
-                'endDate': end_date_str,
-                'meteredItem': 'Memory_GB',
-                'appid': APP_ID,
-                'sno': sno,
-                'fqdn': vm_name,
-                'type': 'VM',
-                'description': f'Memory allocation for {vm_name}',
-                'guid': vm_uuid
-            })
-            sno += 1
-
-            # Create row for Storage
-            rows.append({
-                'accountId': cluster_name,
-                'qty': total_disk_gb,
-                'startDate': start_date_str,
-                'endDate': end_date_str,
-                'meteredItem': 'Storage_GB',
-                'appid': APP_ID,
-                'sno': sno,
-                'fqdn': vm_name,
-                'type': 'VM',
-                'description': f'Storage allocation for {vm_name}',
-                'guid': vm_uuid
-            })
-            sno += 1
-
-        # Fetch and add file servers
+        # Get file servers with storage usage
         file_servers = self.get_file_servers()
+
         for fs in file_servers:
             fs_name = fs.get('name', 'unknown')
             fs_uuid = fs.get('uuid', '')
             used_bytes = fs.get('used_bytes', 0)
-            used_tib = round(used_bytes / (1024 ** 4), 4)  # Convert to TiB
 
-            if used_bytes > 0:  # Only include if there's usage
-                rows.append({
-                    'accountId': ACCOUNT_ID,
-                    'qty': used_tib,
-                    'startDate': start_date_str,
-                    'endDate': end_date_str,
-                    'meteredItem': 'Files_TiB',
-                    'appid': APP_ID,
-                    'sno': sno,
-                    'fqdn': fs_name,
-                    'type': 'FileServer',
-                    'description': f'Files consumed storage for {fs_name}',
-                    'guid': fs_uuid
-                })
-                sno += 1
+            # Convert bytes to TiB (1 TiB = 1024^4 bytes)
+            used_tib = round(used_bytes / (1024 ** 4), 4)
+
+            # Always include file server entry (even if 0)
+            rows.append({
+                'accountId': ACCOUNT_ID,
+                'qty': used_tib,
+                'startDate': start_date_str,
+                'endDate': end_date_str,
+                'meteredItem': 'Files_TiB',
+                'appid': APP_ID,
+                'sno': sno,
+                'fqdn': fs_name,
+                'type': 'FileServer',
+                'description': f'Files consumed storage for {fs_name}',
+                'guid': fs_uuid
+            })
+            sno += 1
 
         # Write CSV (tab-separated)
         fieldnames = ['accountId', 'qty', 'startDate', 'endDate', 'meteredItem',
@@ -292,7 +251,7 @@ class NutanixExporter:
             writer.writeheader()
             writer.writerows(rows)
 
-        logger.info(f"Exported {len(rows)} records ({len(vms)} VMs, {len(file_servers)} file servers) to {output_path}")
+        logger.info(f"Exported {len(rows)} records (Total cores: {total_cores}, File servers: {len(file_servers)}) to {output_path}")
         return output_path
 
 
