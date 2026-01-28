@@ -45,8 +45,10 @@ cluster_node_count = Gauge('nutanix_cluster_node_count', 'Number of nodes in clu
 cluster_physical_cpu_cores = Gauge('nutanix_cluster_physical_cpu_cores', 'Total physical CPU cores in cluster', ['cluster_name', 'cluster_uuid'])
 
 # License metrics
-license_type = Info('nutanix_license', 'Nutanix license information')
-license_cores = Gauge('nutanix_license_cores', 'Licensed CPU cores', ['cluster_name', 'license_type'])
+license_info = Gauge('nutanix_license_info', 'Nutanix license information (1=active)',
+                     ['license_name', 'license_type', 'category', 'sub_category', 'scope', 'expiry_date'])
+license_days_remaining = Gauge('nutanix_license_days_remaining', 'Days until license expires',
+                               ['license_name', 'license_type'])
 
 # VM metrics
 vm_count = Gauge('nutanix_vm_count', 'Total number of VMs', ['cluster_name'])
@@ -452,6 +454,54 @@ class NutanixCollector:
 
         logger.info(f"Collected metrics for {len(file_servers)} file servers")
 
+    def collect_licenses(self):
+        """Collect license metrics using Licensing v4 API."""
+        logger.info("Collecting license metrics...")
+
+        data = self._make_request_v4("licensing/v4.0/config/licenses")
+        if not data:
+            logger.info("No license information available or Licensing API not accessible")
+            return
+
+        licenses = data.get('data', [])
+        if not licenses:
+            logger.info("No licenses found")
+            return
+
+        from datetime import datetime
+
+        for lic in licenses:
+            lic_name = lic.get('name', 'unknown')
+            lic_type = lic.get('type', 'unknown')
+            category = lic.get('category', 'unknown')
+            sub_category = lic.get('subCategory', 'unknown')
+            scope = lic.get('scope', 'unknown')
+            expiry_str = lic.get('expiryDate', '')
+
+            # Set license info (1 = active/present)
+            license_info.labels(
+                license_name=lic_name,
+                license_type=lic_type,
+                category=category,
+                sub_category=sub_category,
+                scope=scope,
+                expiry_date=expiry_str
+            ).set(1)
+
+            # Calculate days remaining
+            if expiry_str:
+                try:
+                    expiry_date = datetime.strptime(expiry_str, '%Y-%m-%d')
+                    days_remaining = (expiry_date - datetime.now()).days
+                    license_days_remaining.labels(
+                        license_name=lic_name,
+                        license_type=lic_type
+                    ).set(days_remaining)
+                except ValueError:
+                    pass
+
+        logger.info(f"Collected metrics for {len(licenses)} licenses")
+
     def collect_all(self):
         """Collect all metrics."""
         try:
@@ -460,6 +510,7 @@ class NutanixCollector:
             self.collect_hosts(cluster_map)
             self.collect_storage_containers()
             self.collect_file_servers()
+            self.collect_licenses()
             logger.info("Metrics collection completed successfully")
         except Exception as e:
             logger.error(f"Error collecting metrics: {e}")

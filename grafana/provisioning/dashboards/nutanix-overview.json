@@ -548,6 +548,70 @@
       ],
       "title": "Storage Container Usage %",
       "type": "bargauge"
+    },
+    {
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "id": 50,
+      "title": "Licenses",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "text", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Days Remaining" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 90 }, { "color": "green", "value": 365 }] } },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 35 },
+      "id": 51,
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "countRows": false, "enablePagination": false, "fields": "", "reducer": ["sum"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "License Name" }]
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "nutanix_license_info",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        },
+        {
+          "expr": "nutanix_license_days_remaining",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "B"
+        }
+      ],
+      "title": "Nutanix Licenses",
+      "transformations": [
+        { "id": "seriesToColumns", "options": { "byField": "license_name" } },
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "Time 1": true, "Time 2": true, "__name__": true, "__name__ 1": true, "__name__ 2": true, "instance": true, "instance 1": true, "instance 2": true, "job": true, "job 1": true, "job 2": true, "Value #A": true, "license_type 2": true }, "indexByName": {}, "renameByName": { "Value #B": "Days Remaining", "category": "Category", "expiry_date": "Expiry Date", "license_name": "License Name", "license_type": "Type", "license_type 1": "Type", "scope": "Scope", "sub_category": "Sub-Category" } } }
+      ],
+      "type": "table"
     }
   ],
   "refresh": "30s",
