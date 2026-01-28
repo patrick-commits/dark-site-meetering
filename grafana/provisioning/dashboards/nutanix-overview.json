@@ -254,6 +254,66 @@
       "type": "stat"
     },
     {
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "id": 60,
+      "title": "File Server Storage",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "TiB",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "tebibytes"
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "id": 61,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "nutanix_file_server_used_bytes / 1024 / 1024 / 1024 / 1024",
+          "legendFormat": "{{file_server_name}} - Used",
+          "refId": "A"
+        },
+        {
+          "expr": "nutanix_file_server_capacity_bytes / 1024 / 1024 / 1024 / 1024",
+          "legendFormat": "{{file_server_name}} - Capacity",
+          "refId": "B"
+        }
+      ],
+      "title": "File Server Storage (TiB)",
+      "type": "timeseries"
+    },
+    {
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "fieldConfig": {
         "defaults": {
