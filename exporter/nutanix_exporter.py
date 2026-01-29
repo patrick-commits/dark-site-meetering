@@ -324,6 +324,14 @@ class NutanixCollector:
         """Collect host metrics using v3 API."""
         logger.info("Collecting host metrics...")
 
+        # Clear previous metrics to avoid duplicates with different labels
+        host_cpu_usage._metrics.clear()
+        host_memory_usage._metrics.clear()
+        host_num_vms._metrics.clear()
+        host_physical_cpu_cores._metrics.clear()
+        host_cpu_sockets._metrics.clear()
+        host_count._metrics.clear()
+
         data = self._make_request_v3("hosts/list", {"kind": "host", "length": 500})
         if not data:
             return
