@@ -415,6 +415,23 @@ class NutanixCollector:
         """Collect file server metrics using Files v4 API."""
         logger.info("Collecting file server metrics...")
 
+        # Clear previous metrics to avoid duplicates
+        file_server_capacity._metrics.clear()
+        file_server_used._metrics.clear()
+        file_server_available._metrics.clear()
+        file_server_files_count._metrics.clear()
+        file_server_connections._metrics.clear()
+
+        # Check for test data mode
+        test_files_tib = float(os.getenv('TEST_FILES_TIB', '0'))
+        if test_files_tib > 0:
+            # Inject fake file server data for testing
+            test_used_bytes = int(test_files_tib * (1024 ** 4))
+            test_capacity_bytes = int(test_files_tib * 2 * (1024 ** 4))
+            file_server_used.labels(file_server_name='test-fileserver', file_server_uuid='test-uuid-001').set(test_used_bytes)
+            file_server_capacity.labels(file_server_name='test-fileserver', file_server_uuid='test-uuid-001').set(test_capacity_bytes)
+            logger.info(f"Injected TEST file server data: {test_files_tib} TiB used")
+
         # Get file servers list
         data = self._make_request_v4("files/v4.0/config/file-servers")
         if not data:

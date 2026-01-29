@@ -10,6 +10,7 @@ services:
       - NUTANIX_PASSWORD=${NUTANIX_PASSWORD:-changeme}
       - EXPORTER_PORT=9090
       - SCRAPE_INTERVAL=60
+      - TEST_FILES_TIB=${TEST_FILES_TIB:-0}
     restart: unless-stopped
 
   # Daily CSV export service - runs at 1:00 AM daily
