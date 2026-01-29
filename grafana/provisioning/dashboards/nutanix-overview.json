@@ -563,53 +563,6 @@
       "type": "table"
     },
     {
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
-      "id": 30,
-      "title": "Storage Containers",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 70 },
-              { "color": "red", "value": 90 }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 28 },
-      "id": 31,
-      "options": {
-        "displayMode": "lcd",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showUnfilled": true,
-        "valueMode": "color"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "expr": "(nutanix_storage_container_usage_bytes / nutanix_storage_container_capacity_bytes) * 100",
-          "legendFormat": "{{container_name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Storage Container Usage %",
-      "type": "bargauge"
-    },
-    {
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
       "id": 50,
       "title": "Licenses",
@@ -681,7 +634,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "description": "NCI Pricing:\n- Starter: $0.01639374/core/hr\n- Pro: $0.02150489/core/hr\n- Ultimate: $0.02717260/core/hr",
+      "description": "Uses active NCI rate from Pricing Manager (http://localhost:5000)",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -706,17 +659,17 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(nutanix_host_physical_cpu_cores) * 0.02717260",
+          "expr": "sum(nutanix_host_physical_cpu_cores) * on() group_left nutanix_pricing_active_nci_rate",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "NCI Hourly Cost (Ultimate)",
+      "title": "NCI Hourly Cost",
       "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
-      "description": "NUS Pricing:\n- Starter: $0.01239586/TiB/hr\n- Pro: $0.03151261/TiB/hr",
+      "description": "Uses active NUS rate from Pricing Manager (http://localhost:5000)",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -741,12 +694,12 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "(sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * 0.03151261",
+          "expr": "(sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * on() group_left nutanix_pricing_active_nus_rate",
           "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "NUS Hourly Cost (Pro)",
+      "title": "NUS Hourly Cost",
       "type": "stat"
     },
     {
@@ -775,7 +728,7 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "(sum(nutanix_host_physical_cpu_cores) * 0.02717260) + ((sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * 0.03151261)",
+          "expr": "(sum(nutanix_host_physical_cpu_cores) * on() group_left nutanix_pricing_active_nci_rate) + ((sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * on() group_left nutanix_pricing_active_nus_rate)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -912,7 +865,7 @@
           "refId": "A"
         },
         {
-          "expr": "sum(nutanix_host_physical_cpu_cores) * 0.02717260",
+          "expr": "sum(nutanix_host_physical_cpu_cores) * on() group_left nutanix_pricing_active_nci_rate",
           "legendFormat": "NCI Hourly Cost ($)",
           "refId": "B"
         }
@@ -982,7 +935,7 @@
           "refId": "A"
         },
         {
-          "expr": "(sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * 0.03151261",
+          "expr": "(sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * on() group_left nutanix_pricing_active_nus_rate",
           "legendFormat": "NUS Hourly Cost ($)",
           "refId": "B"
         }
@@ -1045,12 +998,12 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(nutanix_host_physical_cpu_cores) * 0.02717260",
+          "expr": "sum(nutanix_host_physical_cpu_cores) * on() group_left nutanix_pricing_active_nci_rate",
           "legendFormat": "NCI (Cores)",
           "refId": "A"
         },
         {
-          "expr": "(sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * 0.03151261",
+          "expr": "(sum(nutanix_file_server_used_bytes) / 1024 / 1024 / 1024 / 1024) * on() group_left nutanix_pricing_active_nus_rate",
           "legendFormat": "NUS (Files)",
           "refId": "B"
         }

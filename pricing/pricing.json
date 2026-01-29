@@ -1,0 +1,52 @@
+{
+  "nci": {
+    "SP-SW-NCI-STR-PR": {
+      "name": "NCI Starter",
+      "hourly_rate": 0.01639374,
+      "annual_rate": 143.61,
+      "unit": "core"
+    },
+    "SP-SW-NCI-PRO-PR": {
+      "name": "NCI Pro",
+      "hourly_rate": 0.02150489,
+      "annual_rate": 188.38,
+      "unit": "core"
+    },
+    "SP-SW-NCI-ULT-PR": {
+      "name": "NCI Ultimate",
+      "hourly_rate": 0.02717260,
+      "annual_rate": 238.03,
+      "unit": "core"
+    }
+  },
+  "nus": {
+    "SP-SW-NUS-STR-PR": {
+      "name": "NUS Starter",
+      "hourly_rate": 0.01239586,
+      "annual_rate": 108.59,
+      "unit": "TiB"
+    },
+    "SP-SW-NUS-PRO-PR": {
+      "name": "NUS Pro",
+      "hourly_rate": 0.03151261,
+      "annual_rate": 276.05,
+      "unit": "TiB"
+    },
+    "SP-SW-NUS-ADR-PR": {
+      "name": "NUS ADR",
+      "hourly_rate": 0.00410799,
+      "annual_rate": 35.99,
+      "unit": "TiB"
+    },
+    "SP-SW-NUS-SEC-PR": {
+      "name": "NUS Security",
+      "hourly_rate": 0.00410799,
+      "annual_rate": 35.99,
+      "unit": "TiB"
+    }
+  },
+  "active": {
+    "nci": "SP-SW-NCI-ULT-PR",
+    "nus": "SP-SW-NUS-PRO-PR"
+  }
+}

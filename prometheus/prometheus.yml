@@ -12,3 +12,9 @@ scrape_configs:
       - targets: ['nutanix-exporter:9090']
     scrape_interval: 60s
     scrape_timeout: 30s
+
+  - job_name: 'pricing'
+    static_configs:
+      - targets: ['pricing:5000']
+    scrape_interval: 60s
+    metrics_path: /metrics
